@@ -1,0 +1,6 @@
+DATABASE = 'spdb.db'
+DESCRIPTION = ''
+INVITE_LINK = 'https://discordapp.com/oauth2/authorize?client_id={0}&scope=bot&permissions={1}'
+PREFIX = 'z.'
+TOKEN = ''
+OWNER_ID = '135822605583253504'
