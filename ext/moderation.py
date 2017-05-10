@@ -11,7 +11,9 @@ from settings import *
 class Moderation:
     def __init__(self, bot):
         self.bot = bot
+
         self.connection = sqlite3.connect(DATABASE)
+        self.c = self.connection.cursor()
 
         self.timeout_check = bot.loop.create_task(self.timeout_check())
 
@@ -34,15 +36,14 @@ class Moderation:
             - Removes "Blocked" role from the user            
         """
         try:
-            c = self.connection.cursor()
-            c.execute('SELECT ID FROM timeouts '
-                      'WHERE MemberID = {0.id} '
-                      'AND ServerID = {1.message.server.id}'.format(member, ctx))
-            t_id = c.fetchone()[0]
+            self.c.execute('SELECT ID FROM timeouts '
+                           'WHERE MemberID = {0.id} '
+                           'AND ServerID = {1.message.server.id}'.format(member, ctx))
+            t_id = self.c.fetchone()[0]
             role = discord.utils.get(ctx.message.server.roles, name='Blocked')
             if t_id > 0:
                 await self.bot.remove_roles(member, role)
-                c.execute('DELETE FROM timeouts WHERE ID = {}'.format(str(t_id)))
+                self.c.execute('DELETE FROM timeouts WHERE ID = {}'.format(str(t_id)))
             else:
                 await self.bot.say(embed=discord.Embed(title='Error', description='User was not timed out.'))
         except Exception as e:
@@ -55,19 +56,18 @@ class Moderation:
     async def timeout_list(self, ctx):
         """Lists all current timeouts for the server"""
         try:
-            c = self.connection.cursor()
-            c.execute('SELECT MemberID, TimeoutTime, TimeInMinutes '
-                      'FROM timeouts '
-                      'WHERE ServerID = "{0.message.server.id}"'.format(ctx))
-            timeouts = c.fetchall()
+            self.c.execute('SELECT MemberID, TimeoutTime, TimeInMinutes '
+                           'FROM timeouts '
+                           'WHERE ServerID = "{0.message.server.id}"'.format(ctx))
+            timeouts = self.c.fetchall()
             desc = ''
             if len(timeouts) > 0:
                 for timeout in timeouts:
                     member = ctx.message.server.get_member(user_id=str(timeout[0]))
                     time_until_timeout = datetime.strptime(str(timeout[1]), '%Y-%m-%d %H:%M:%S') + timedelta(hours=2, minutes=timeout[2])
-                    c.execute('SELECT TimeoutCount FROM users WHERE ID = {}'.format(member.id))
+                    self.c.execute('SELECT TimeoutCount FROM users WHERE ID = {}'.format(member.id))
                     try:
-                        timeout_count = c.fetchone()[0]
+                        timeout_count = self.c.fetchone()[0]
                     except:
                         timeout_count = 0
                     desc += '{0} : {1} : {2}'.format(timeout_count, member, time_until_timeout)
@@ -84,8 +84,7 @@ class Moderation:
     async def timeout_overview(self, ctx):
         """Show an overview of people who have more than one timeout"""
         try:
-            c = self.connection.cursor()
-            c.execute('')
+            self.c.execute('')
         except Exception as e:
             await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
 
@@ -102,27 +101,26 @@ class Moderation:
             role = discord.utils.get(ctx.message.server.roles, name='Blocked')
             if role:
                 await self.bot.add_roles(member, role)
-                c = self.connection.cursor()
 
-                c.execute('SELECT MAX(ID) FROM timeouts')
+                self.c.execute('SELECT MAX(ID) FROM timeouts')
                 try:
-                    t_id = c.fetchone()[0] + 1
+                    t_id = self.c.fetchone()[0] + 1
                 except:
                     t_id = 1
 
-                c.execute('INSERT INTO timeouts  VALUES '
-                          '({0}, {1.message.server.id}, {2.id}, CURRENT_TIMESTAMP, {3})'
-                          .format(t_id, ctx, member, amount))
+                self.c.execute('INSERT INTO timeouts  VALUES '
+                               '({0}, {1.message.server.id}, {2.id}, CURRENT_TIMESTAMP, {3})'
+                               .format(t_id, ctx, member, amount))
 
                 if await self.user_exists(member.id) is True:
-                    c.execute('UPDATE users '
-                              'SET TimeoutCount = ((SELECT TimeoutCount FROM users WHERE ID = {0}) + 1) '
-                              'WHERE ID = {0}'.format(member.id))
+                    self.c.execute('UPDATE users '
+                                   'SET TimeoutCount = ((SELECT TimeoutCount FROM users WHERE ID = {0}) + 1) '
+                                   'WHERE ID = {0}'.format(member.id))
                 else:
                     await self.add_user(member.id)
-                    c.execute('UPDATE users '
-                              'SET TimeoutCount = ((SELECT TimeoutCount FROM users WHERE ID = {0}) + 1) '
-                              'WHERE ID = {0}'.format(member.id))
+                    self.c.execute('UPDATE users '
+                                   'SET TimeoutCount = ((SELECT TimeoutCount FROM users WHERE ID = {0}) + 1) '
+                                   'WHERE ID = {0}'.format(member.id))
             else:
                 await self.bot.say(embed=discord.Embed(title='Role Error', description='Blocked role is missing!'))
         except Exception as e:
@@ -141,9 +139,8 @@ class Moderation:
     async def mod_add(self, ctx, *, member: discord.Member):
         """Adds a bot-moderator for a specific server"""
         try:
-            c = self.connection.cursor()
-            c.execute('INSERT INTO moderators VALUES'
-                      '({0.id}, {1.message.server.id}, 0)'.format(member, ctx))
+            self.c.execute('INSERT INTO moderators VALUES'
+                           '({0.id}, {1.message.server.id}, 0)'.format(member, ctx))
         except sqlite3.IntegrityError:
             await self.bot.say(embed=discord.Embed(title='Error', description='User is already a mod on this server!', color=0xFF0000))
         except Exception as e:
@@ -156,9 +153,8 @@ class Moderation:
     async def mod_list(self, ctx):
         """Shows all bot-moderators for the specific server"""
         try:
-            c = self.connection.cursor()
-            c.execute('SELECT ID FROM moderators WHERE ServerID = {0.message.server.id}'.format(ctx))
-            mods = c.fetchall()
+            self.c.execute('SELECT ID FROM moderators WHERE ServerID = {0.message.server.id}'.format(ctx))
+            mods = self.c.fetchall()
         except Exception as e:
             await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
         else:
@@ -175,8 +171,7 @@ class Moderation:
         """
         if not member.id == ctx.message.server.owner.id:
             try:
-                c = self.connection.cursor()
-                c.execute('DELETE FROM moderators WHERE ServerID = {0.message.server.id} AND ID = {1.id}'.format(ctx, member))
+                self.c.execute('DELETE FROM moderators WHERE ServerID = {0.message.server.id} AND ID = {1.id}'.format(ctx, member))
             except Exception as e:
                 await self.bot.say(
                     embed=discord.Embed(title='Error: Could not add mod', description=str(e), color=0xFF0000))
@@ -191,9 +186,8 @@ class Moderation:
     async def timeout_check(self):
         while not self.bot.is_closed:
             try:
-                c = self.connection.cursor()
-                c.execute('SELECT * FROM timeouts')
-                timeouts = c.fetchall()
+                self.c.execute('SELECT * FROM timeouts')
+                timeouts = self.c.fetchall()
             except Exception as e:
                 print('[error]timeout_check: {}'.format(str(e)))
             else:
@@ -205,15 +199,14 @@ class Moderation:
                         timeout_time = datetime.strptime(timeout[3], '%Y-%m-%d %H:%M:%S') + timedelta(minutes=timeout[4], hours=2)
                         if timeout_time <= datetime.now():
                             await self.bot.remove_roles(member, role)
-                            c.execute('DELETE FROM timeouts WHERE ID = {}'.format(str(timeout[0])))
+                            self.c.execute('DELETE FROM timeouts WHERE ID = {}'.format(str(timeout[0])))
             finally:
                 self.connection.commit()
             await asyncio.sleep(15)
 
     async def add_user(self, user_id):
         try:
-            c = self.connection.cursor()
-            c.execute('INSERT INTO users (ID) VALUES ({0})'.format(user_id))
+            self.c.execute('INSERT INTO users (ID) VALUES ({0})'.format(user_id))
         except Exception as e:
             await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
         else:
@@ -221,11 +214,9 @@ class Moderation:
 
     async def user_exists(self, user_id):
         try:
-            c = self.connection.cursor()
-            c.execute('SELECT ID FROM users WHERE ID = {}'.format(user_id))
-
+            self.c.execute('SELECT ID FROM users WHERE ID = {}'.format(user_id))
             try:
-                if c.fetchone()[0] > 0:
+                if self.c.fetchone()[0] > 0:
                     return True
                 else:
                     return False
