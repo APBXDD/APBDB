@@ -29,22 +29,12 @@ class Moderation:
     @commands.group(pass_context=True)
     @checks.can_manage()
     async def timeout(self, ctx):
+        """ Timeout commands
+            
+            - requires manage message permissions
+        """
         if ctx.invoked_subcommand is None:
             pass
-
-    @timeout.command(pass_context=True, name='clear')
-    async def timeout_reset(self, ctx, member: discord.Member):
-        """Resets the timeout count for a user"""
-        try:
-            if self.user_exists(member.id) is True:
-                self.c.execute('UPDATE timeouts SET TimeoutCount = 0 WHERE MemberID = ? AND ServerID = ?',
-                               (member.id, ctx.message.server.id))
-            else:
-                await self.bot.say(embed=discord.Embed(title='Error!',
-                                                       description='User does not have any timeouts on this server!',
-                                                       color=0xFF0000))
-        except Exception as e:
-            await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
 
     @timeout.command(pass_context=True, name='list')
     async def timeout_list(self, ctx):
@@ -70,29 +60,6 @@ class Moderation:
             e.set_footer(text='Timeouts : User : Date-Time : Timeout Time (minutes)')
             await self.bot.say(embed=e)
 
-    @timeout.command(pass_context=True, name='remove')
-    async def timeout_remove(self, ctx, member: discord.Member):
-        """Remove a timeout from a user
-
-            - Sets Enabled to False in "timeouts"
-            - Removes "Blocked" role from the user
-        """
-        try:
-            self.c.execute('SELECT ID FROM timeouts WHERE MemberID = ? AND ServerID = ?',
-                           (member.id, ctx.message.server.id))
-            t_id = self.c.fetchone()[0]
-            role = discord.utils.get(ctx.message.server.roles, name='Blocked')
-            if t_id > 0:
-                await self.bot.remove_roles(member, role)
-                self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', str(t_id))
-            else:
-                await self.bot.say(embed=discord.Embed(title='Error', description='User was not timed out.'))
-        except Exception as e:
-            await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
-        else:
-            self.connection.commit()
-            await self.bot.say(embed=discord.Embed(title='Timeout removed.', description=''.format()))
-
     @timeout.command(pass_context=True, name='overview')
     async def timeout_overview(self, ctx):
         """Show an overview of people who have more than one timeout"""
@@ -111,6 +78,43 @@ class Moderation:
             e = discord.Embed(title='Timeout Overview', description=desc)
             e.set_footer(text='Timeouts : User : Last Timeout')
             await self.bot.say(embed=e)
+
+    @timeout.command(pass_context=True, name='remove')
+    async def timeout_remove(self, ctx, member: discord.Member):
+        """Remove a timeout from a user
+
+            - Sets Enabled to False in "timeouts" for a user
+            - Removes "Blocked" role from the user
+        """
+        try:
+            self.c.execute('SELECT ID FROM timeouts WHERE MemberID = ? AND ServerID = ?',
+                           (member.id, ctx.message.server.id))
+            t_id = self.c.fetchone()[0]
+            role = discord.utils.get(ctx.message.server.roles, name='Blocked')
+            if t_id > 0:
+                await self.bot.remove_roles(member, role)
+                self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', str(t_id))
+            else:
+                await self.bot.say(embed=discord.Embed(title='Error', description='User was not timed out.'))
+        except Exception as e:
+            await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
+        else:
+            self.connection.commit()
+            await self.bot.say(embed=discord.Embed(title='Timeout removed.', description=''.format()))
+
+    @timeout.command(pass_context=True, name='clear')
+    async def timeout_reset(self, ctx, member: discord.Member):
+        """Resets the timeout count for a user"""
+        try:
+            if self.user_exists(member.id) is True:
+                self.c.execute('UPDATE timeouts SET TimeoutCount = 0 WHERE MemberID = ? AND ServerID = ?',
+                               (member.id, ctx.message.server.id))
+            else:
+                await self.bot.say(embed=discord.Embed(title='Error!',
+                                                       description='User does not have any timeouts on this server!',
+                                                       color=0xFF0000))
+        except Exception as e:
+            await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
 
     @timeout.command(pass_context=True, name='user')
     async def timeout_user(self, ctx, member: discord.Member, amount: int):
@@ -153,7 +157,7 @@ class Moderation:
             else:
                 await self.bot.say(embed=discord.Embed(title='Role Error', description='Blocked role is missing!'))
         except Exception as e:
-            await self.bot.say(embed=discord.Embed(title='Error', description=e))
+            await self.bot.say(embed=discord.Embed(title='Error', description=str(e)))
         else:
             self.connection.commit()
             await self.bot.say(embed=discord.Embed(title='Timeout',
@@ -163,6 +167,7 @@ class Moderation:
     @commands.group(pass_context=True, hidden=True)
     @checks.is_owner_server()
     async def mod(self, ctx):
+        """ Mod commands for server owner"""
         if ctx.invoked_subcommand is None:
             pass
 
