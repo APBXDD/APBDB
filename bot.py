@@ -8,6 +8,7 @@ from discord.ext import commands
 initial_extensions = [
     'admin',
     'general',
+    'help',
     'moderation'
 ]
 
@@ -31,7 +32,6 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    print('[message]{0.server.id} : {0.author} : {0.content}'.format(message))
     await bot.process_commands(message)
 
 
