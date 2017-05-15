@@ -10,7 +10,9 @@ from settings import *
 class Admin:
     def __init__(self, bot):
         self.bot = bot
+
         self.connection = sqlite3.connect(DATABASE)
+        self.c = self.connection.cursor()
 
     @commands.group(pass_context=True, hidden=True)
     @checks.is_owner()
@@ -59,8 +61,7 @@ class Admin:
     async def status_game(self, game: str):
         """Update bot game name"""
         try:
-            c = self.connection.cursor()
-            c.execute('UPDATE bot SET DefaultGame = "{}" WHERE ID = 0'.format(game))
+            self.c.execute('UPDATE bot SET DefaultGame = ? WHERE ID = 0', [game])
             await self.bot.change_presence(game=discord.Game(name=game))
         except Exception as e:
             await self.bot.say(embed=discord.Embed(title='Error', description=str(e), color=0xFF0000))
@@ -71,10 +72,12 @@ class Admin:
 
     @admin_status.command(name='prefix')
     async def status_prefix(self, prefix: str):
-        """Update bot game name"""
+        """Update bot prefix
+        
+            !!! NOT USED/WORKING RIGHT NOW !!!
+        """
         try:
-            c = self.connection.cursor()
-            c.execute('UPDATE bot SET DefaultPrefix = "{}" WHERE ID = 0'.format(prefix))
+            self.c.execute('UPDATE bot SET DefaultPrefix = ? WHERE ID = 0',  [prefix])
         except Exception as e:
             await self.bot.say(embed=discord.Embed(title='Error', description=str(e), color=0xFF0000))
         else:
@@ -86,8 +89,7 @@ class Admin:
     async def status_username(self, username: str):
         """Update bot username"""
         try:
-            c = self.connection.cursor()
-            c.execute('UPDATE bot SET UserName = "{}" WHERE ID = 0'.format(username))
+            self.c.execute('UPDATE bot SET UserName = ? WHERE ID = 0', [username])
             await self.bot.edit_profile(username=username)
         except Exception as e:
             await self.bot.say(discord.Embed(title='Error', description=str(e)))
@@ -117,10 +119,10 @@ class Admin:
             - Logs out of Discord
             - Closes the bot
         """
-        await self.bot.say(embed=discord.Embed(title='Admin: Bot Shutting Down...'))
+        await self.bot.say(embed=discord.Embed(title='Bot Shutting Down...'))
         self.connection.close()
-        self.bot.logout()
-        self.bot.close()
+        await self.bot.logout()
+        await self.bot.close()
 
     @admin.command(name='unload', hidden=True)
     async def admin_unload(self, *, ext: str):
