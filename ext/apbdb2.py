@@ -231,7 +231,7 @@ class APBDB2:
                 if len(posts) > 0 and not isinstance(posts, int):
                     for post in reversed(posts):
                         # separate the quote message and the admin message with BeautifulSoup
-                        soup = BeautifulSoup(post['p_description'], 'html.parser')
+                        soup = BeautifulSoup(post['content'], 'html.parser')
                         desc_quote = soup.find('blockquote')
                         if desc_quote is not None:
                             desc_quote = soup.find('blockquote').get_text()
@@ -252,19 +252,19 @@ class APBDB2:
                         if len(desc) >= 1000:
                             desc = desc[:1000]
 
-                        desc += '\n [Read more...]({})'.format(post['p_link'])
+                        desc += '\n [Read more...]({})'.format(post['postlink'])
 
                         e = discord.Embed(
-                            title=post['p_thread'], 
+                            title=post['threadname'], 
                             description=desc,
-                            url=post['p_thread_link'],
+                            url=post['threadlink'],
                             color=0xFF0000,
-                            timestamp=datetime.strptime(post['p_pubdate'], "%Y-%m-%dT%H:%M:%S+00:00"
+                            timestamp=datetime.strptime(post['pubdate'], "%Y-%m-%dT%H:%M:%SZ"
                         ))
                         e.set_author(
-                            name=post['author']['p_author'],
-                            url=post['p_author_link'],
-                            icon_url=post['author']['p_author_img']
+                            name=post['author']['name'],
+                            url=post['author']['profilelink'],
+                            icon_url=post['author']['imagelink']
                         )
 
                         try:
@@ -277,7 +277,7 @@ class APBDB2:
                             continue
                         else:
                             await asyncio.sleep(1)
-                            self.c.execute('UPDATE apb_news_feed SET PostID = ? WHERE ID = ?', (post['p_id'], server[0]))
+                            self.c.execute('UPDATE apb_news_feed SET PostID = ? WHERE ID = ?', (post['id'], server[0]))
                             self.connection.commit()
             print('[DEBUG] APB NEWS FEED : EVENT : LOOP COMPLETED (90 s)')
             await asyncio.sleep(90)
