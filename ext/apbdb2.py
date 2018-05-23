@@ -143,7 +143,7 @@ class APBDB2:
         try:
             id = await utils.api_request(self.API_URL + 'tracker?limit=1')
             self.c.execute('INSERT INTO apb_news_feed VALUES (?, ?, ?, ?)', 
-                          (ctx.message.guild.id, ctx.message.channel.id, id[0]['p_id'], 1))
+                          (ctx.message.guild.id, ctx.message.channel.id, id[0]['id'], 1))
         except sqlite3.IntegrityError as e:
             self.c.execute('UPDATE apb_news_feed SET ChannelID = ? WHERE ID = ?', (ctx.message.channel.id, ctx.message.guild.id))
             self.connection.commit()
