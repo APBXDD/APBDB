@@ -1,3 +1,4 @@
+import asyncio
 import discord
 import sqlite3
 
@@ -17,7 +18,7 @@ class LFG:
         self.connection = sqlite3.connect(DATABASE)
         self.c = self.connection.cursor()
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True, case_insensitive=True)
     async def ready(self, ctx):
         if ctx.invoked_subcommand is None:
             self.c.execute('SELECT RoleID FROM lfg WHERE ServerID = ?', [ctx.message.guild.id])
@@ -32,10 +33,14 @@ class LFG:
                                 role = discord.utils.get(ctx.message.guild.roles, name=x.name)
 
                         await ctx.author.remove_roles(role)
-                        await ctx.send('You are not ready anymore!', delete_after=3.0)
+                        await ctx.send('{0} is not ready anymore!'.format(ctx.message.author.mention), delete_after=5.0)
+                        await asyncio.sleep(5)
+                        await ctx.message.delete()
                     else:
                         await ctx.author.add_roles(role)
-                        await ctx.send('You are now ready!', delete_after=3.0)
+                        await ctx.send('{0} is ready!'.format(ctx.message.author.mention), delete_after=5.0)
+                        await asyncio.sleep(5)
+                        await ctx.message.delete()
                 else:
                     await ctx.send(
                         embed=discord.Embed(
