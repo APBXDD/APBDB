@@ -6,6 +6,8 @@ import json
 
 from settings import *
 from datetime import datetime
+from colorama import init, Fore, Back, Style
+init(autoreset=True)
 
 
 async def api_request(url):
@@ -100,3 +102,54 @@ class Setup:
         finally:
             self.connection.commit()
             print('[database]Guild {0.name} : {0.id} removed!'.format(guild))
+
+
+class Message:
+    """
+        Class for console messages
+
+        Types:
+         - empty = regular
+         - 1 = debug
+         - 2 = alert
+         - 3 = error
+    
+    """
+    def __init__(self, type: int, message:str):
+        self.type = type
+        self.message = message
+        self.time = "[{0}]".format(datetime.now().strftime("%d-%m %H:%M:%S"))
+        self.useDebug = True
+        self.selection()
+        
+    def selection(self):
+        final = ""
+
+        try:
+            if self.type is 1:
+                final = self.debug()
+            elif self.type is 2:
+                final = self.alert()
+            elif self.type is 3:
+                final = self.error()
+            else:
+                final = self.default()
+        except Exception as e:
+            print(str(e))
+        else:
+            if self.type is not 1:
+                print(final)
+            elif self.type is 1 and self.useDebug is True:
+                print(final)
+
+    def default(self):
+        return "{0} {1}".format(self.time, self.message)
+
+    def debug(self):
+        return "{0}{1}{2}[DEBUG] {3}".format(Style.DIM, Fore.WHITE, self.time, self.message)
+
+    def alert(self):
+        return "{0}{1}[ALERT] {2}".format(Fore.YELLOW, self.time, self.message)
+
+    def error(self):
+        return "{0}{1}[ERROR] {2}".format(Fore.RED, self.time, self.message)
