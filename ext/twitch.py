@@ -9,6 +9,7 @@ import math  # WutFace
 from datetime import datetime, timedelta
 from discord.ext import commands
 from ext.utils import checks
+from ext.utils.utils import Message
 from settings import *
 
 ext = True
@@ -47,15 +48,15 @@ class Twitch:
         userqs = userq.split(',')
         for userq in userqs:
             await ctx.trigger_typing()
-            user = await self.user_exists(userq)
+            user = await self.get_channel_by_id(userq)
             if user is not False:
                 self.c.execute('SELECT COUNT(*) FROM twitch WHERE ServerID = ? AND UserID = ?', (
                     ctx.message.guild.id, 
-                    user.id
+                    user['_id']
                 ))
                 if int(self.c.fetchone()[0]) > 0:
                     await self.twitch_e(ctx, 'Channel {} already in the notification list!'.format(
-                        user.display_name
+                        user['display_name']
                     ))
                 else:
                     try:
@@ -66,7 +67,7 @@ class Twitch:
                         await self.twitch_e(
                             ctx, 
                             'Channel added!', 
-                            '**{}** added to notification list.'.format(user.display_name)
+                            '**{}** added to notification list.'.format(user['display_name'])
                         )
                     except Exception as e:
                         await ctx.send(embed=discord.Embed(title='Error', description=str(e)))
@@ -99,10 +100,10 @@ class Twitch:
             message = await ctx.send(embed=e)
             for user in users[(0 + (per_embed * (page - 1))):(per_embed + (per_embed * (page - 1)))]:
                 await ctx.trigger_typing()
-                channel = self.twitchClient.channels.get_by_id(user[0])
-                stream = self.twitchClient.streams.get_stream_by_user(channel.id)
+                channel = await self.get_channel_by_id(user[0])
+                stream = await self.get_stream(channel['_id'])
                 e.add_field(
-                    name=channel.display_name, 
+                    name=channel['display_name'], 
                     value='{}'.format(
                         await self.channel_online(stream)
                     )
@@ -172,8 +173,9 @@ class Twitch:
             await self.twitch_e(ctx, 'Notification channel removed.')
 
     async def twitch_notify(self):
-        print('[bg] Twitch Notify active.')
+        Message(1, "[TWITCH] Notifier loop active")
         while not self.bot.is_closed():
+            Message(1, "[TWITCH] Notifier loop starting")
             async with self.notifier_task_lock:
                 self.c.execute('SELECT * FROM servers')
                 guilds = self.c.fetchall()
@@ -181,48 +183,81 @@ class Twitch:
                     srv = self.bot.get_guild(int(guild[0]))
                     if guild[2] is not 0:
                         try:
+                            Message(1, "[TWITCH] Guild {0} found.".format(srv))
                             self.c.execute('SELECT UserID FROM twitch WHERE ServerID = ?', [srv.id])
                             users = self.c.fetchall()
+                            Message(1, "[TWITCH] Found {0} channels in guild {1}.".format(len(users), srv))
                             for user in users:
-                                stream = self.twitchClient.streams.get_stream_by_user(user)
-                                if stream is not None:
+                                stream = await self.get_stream(user[0])
+                                if stream != None:
                                     if await self.twitch_notify_update(srv.id, stream) is True:
+                                        Message(1, "[TWITCH] Stream {0} live. Broadcasting...".format(stream['channel']['display_name']))
                                         await self.twitch_notify_message(stream, guild[2])
                         except Exception as e:
                             print(e)
-            print('[DEBUG] TWITCH NOTIFY : EVENT : LOOP COMPLETED (120 s)')
+            Message(1, "[TWITCH] Notifier loop completed (120 s)")
             await asyncio.sleep(120)
 
+    async def translate_username_to_id(self, user):
+        url = '{0}/users?login={1}'.format(self.TWITCH_API, user)
+        user = await self._twitch_request(url)
+        print(user)
+
+    async def get_stream(self, user_id):
+        url = '{0}/streams/{1}'.format(self.TWITCH_API, user_id)
+        stream = await self._twitch_request(url)
+        return stream['stream']
+
+    async def get_channel_by_id(self, channel_id):
+        url ='{0}/channels/{1}'.format(self.TWITCH_API, channel_id)
+        channel = await self._twitch_request(url)
+        return channel
+
+    async def _twitch_request(self, url, params = None):
+        if params is None:
+            params = {
+                'Accept': 'application/vnd.twitchtv.v5+json',
+                'Client-ID': TWITCH_ID
+            }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=params) as r:
+                if r.status == 200:
+                    return await r.json()
+        return r.status
+
     async def twitch_notify_update(self, server_id, stream):    
-        if stream.stream_type == 'live':
-            if stream.created_at < datetime.now():
+        if stream['stream_type'] == 'live':
+            stream['created_at'] = datetime.strptime(stream['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+
+            if stream['created_at'] < datetime.now():
                 self.c.execute('SELECT LastStream FROM twitch WHERE UserID = ? AND ServerID = ?', (
-                    stream.channel.id, 
+                    stream['channel']['_id'],
                     server_id
                 ))
                 last_stream = self.c.fetchone()
                 last_stream = last_stream[0]
                 if last_stream is None:
                     self.c.execute('UPDATE twitch SET LastStream = ? WHERE ServerID = ? AND UserID = ?', (
-                        stream.created_at,
+                        stream['created_at'],
                         server_id,
-                        stream.channel.id
+                        stream['channel']['_id']
                     ))
                     self.connection.commit()
                     return True
-                elif datetime.strptime(last_stream, '%Y-%m-%d %H:%M:%S') + timedelta(minutes=10) < stream.created_at:
+                elif datetime.strptime(last_stream, '%Y-%m-%d %H:%M:%S') + timedelta(minutes=10) < stream['created_at']:
                     self.c.execute('UPDATE twitch SET LastStream = ? WHERE ServerID = ? AND UserID = ?', (
-                        stream.created_at,
+                        stream['created_at'],
                         server_id,
-                        stream.channel.id, 
+                        stream['channel']['_id'], 
                     ))
                     self.connection.commit()
                     return True
-                elif datetime.strptime(last_stream, '%Y-%m-%d %H:%M:%S') + timedelta(minutes=10) > stream.created_at:
+                elif datetime.strptime(last_stream, '%Y-%m-%d %H:%M:%S') + timedelta(minutes=10) > stream['created_at']:
                     self.c.execute('UPDATE twitch SET LastStream = ? WHERE ServerID = ? AND UserID = ?', (
                         datetime.strptime(last_stream, '%Y-%m-%d %H:%M:%S') + timedelta(minutes=10),
                         server_id,
-                        stream.channel.id, 
+                        stream['channel']['_id'], 
                     ))
                     self.connection.commit()
         return False
@@ -231,15 +266,15 @@ class Twitch:
         try:
             channel = self.bot.get_channel(int(channel_id))
             e = discord.Embed(
-                title='Now Live: {}'.format(stream.channel.display_name),
-                description=await self.twitch_filter(stream.channel.status),
-                url=stream.channel.url,
-                timestamp=stream.created_at,
+                title='Now Live: {}'.format(stream['channel']['display_name']),
+                description=await self.twitch_filter(stream['channel']['status']),
+                url=stream['channel']['url'],
+                timestamp=stream['created_at'],
                 color=0x6441A5
             )
             e.set_author(name='Twitch Alert', icon_url=self.TWITCH_LOGO)
-            e.set_thumbnail(url=stream.channel.logo)
-            e.add_field(name='Playing', value=stream.game)
+            e.set_thumbnail(url=stream['channel']['logo'])
+            e.add_field(name='Playing', value=stream['game'])
             e.set_footer(text='Stream started')
             await channel.send(embed=e)
         except Exception as e:
@@ -271,10 +306,10 @@ class Twitch:
         try:
             if stream is None:
                 return 'Offline'
-            elif stream.stream_type == 'live':
-                return '\N{VIDEO GAME} [Live]({})'.format(stream.channel.url)
-            elif stream.stream_type == 'rerun':
-                return '\N{MOVIE CAMERA} [Vodcast]({})'.format(stream.channel.url)
+            elif stream['stream_type'] == 'live':
+                return '\N{VIDEO GAME} [Live]({})'.format(stream['channel']['url'])
+            elif stream['stream_type'] == 'rerun':
+                return '\N{MOVIE CAMERA} [Vodcast]({})'.format(stream['channel']['url'])
         except:
             return 'Unknown'
         return 'Unknown'

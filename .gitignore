@@ -144,3 +144,4 @@ $RECYCLE.BIN/
 # database files
 spdb.db
 settings.py
+test.py
