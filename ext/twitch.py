@@ -12,12 +12,6 @@ from ext.utils import checks
 from ext.utils.utils import Message
 from settings import *
 
-ext = True
-try:
-    from twitch import TwitchClient
-except ImportError:
-    ext = False
-
 
 class Twitch:
     def __init__(self, bot):
@@ -25,8 +19,6 @@ class Twitch:
 
         self.connection = sqlite3.connect(DATABASE)
         self.c = self.connection.cursor()
-
-        self.twitchClient = TwitchClient(client_id=TWITCH_ID)
 
         self.notifier_task = bot.loop.create_task(self.twitch_notify())
         self.notifier_task_lock = asyncio.Lock()
@@ -37,7 +29,7 @@ class Twitch:
     TWITCH_API = 'https://api.twitch.tv/kraken'
     TWITCH_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTURYDhGkbONkCqAOExibcLSvxdjCoWZtV8G24El4Y7YU7MKuZc'
 
-    @commands.group()
+    @commands.group(case_insensitive=True)
     @checks.can_manage()
     async def twitch(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -48,7 +40,7 @@ class Twitch:
         userqs = userq.split(',')
         for userq in userqs:
             await ctx.trigger_typing()
-            user = await self.get_channel_by_id(userq)
+            user = await self.user_exists(userq)
             if user is not False:
                 self.c.execute('SELECT COUNT(*) FROM twitch WHERE ServerID = ? AND UserID = ?', (
                     ctx.message.guild.id, 
@@ -61,7 +53,7 @@ class Twitch:
                 else:
                     try:
                         self.c.execute('INSERT INTO twitch(UserID, ServerID) VALUES (?, ?)', (
-                            user.id,
+                            user['_id'],
                             ctx.message.guild.id
                         ))
                         await self.twitch_e(
@@ -118,25 +110,25 @@ class Twitch:
         if user is not False:
             self.c.execute('SELECT COUNT(*) FROM twitch WHERE ServerID = ? AND UserID = ?', (
                 ctx.message.guild.id, 
-                user.id
+                user['_id']
             ))
             if int(self.c.fetchone()[0]) > 0:
                 try:
                     self.c.execute('DELETE FROM twitch WHERE ServerID = ? AND UserID = ?', (
                         ctx.message.guild.id,
-                        user.id
+                        user['_id']
                     ))
                     await self.twitch_e(
                         ctx, 
                         'Channel removed!',
-                        '**{}** removed from notification list.'.format(user.display_name))
+                        '**{}** removed from notification list.'.format(user['display_name']))
                 except Exception as e:
                     await ctx.send(embed=discord.Embed(title='Error', description=str(e)))
                 else:
                     self.connection.commit()
             else:
                 await self.twitch_e(ctx, 'Channel {} is not in the notification list!'.format(
-                    user.display_name
+                    user['display_name']
                 ))            
         else:
             await self.twitch_e(
@@ -201,7 +193,7 @@ class Twitch:
     async def translate_username_to_id(self, user):
         url = '{0}/users?login={1}'.format(self.TWITCH_API, user)
         user = await self._twitch_request(url)
-        print(user)
+        return user['users']
 
     async def get_stream(self, user_id):
         url = '{0}/streams/{1}'.format(self.TWITCH_API, user_id)
@@ -297,8 +289,8 @@ class Twitch:
 
     async def user_exists(self, user):
         try:
-            user = self.twitchClient.users.translate_usernames_to_ids(user)[0]
-            return user
+            user = await self.translate_username_to_id(user)
+            return user[0]
         except IndexError:
             return False
         
@@ -316,8 +308,4 @@ class Twitch:
 
 
 def setup(bot):
-    if ext is True:
-        bot.add_cog(Twitch(bot))
-    else:
-        print('[exts]Extension "twitch" not loaded. Missing python-twitch-client! (pip install python-twitch-client)')
-        raise ImportError
+    bot.add_cog(Twitch(bot))
