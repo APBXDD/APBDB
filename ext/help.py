@@ -11,7 +11,7 @@ class Help:
 
     EMBED_COLOR = 0x00FF00
 
-    @commands.group()
+    @commands.group(case_insensitive=True)
     async def help(self, ctx):
         if ctx.invoked_subcommand is None:
             cmds = [['Admin', 'Admin Commands'],
@@ -97,7 +97,7 @@ class Help:
         e.set_footer(text='Example: {}twitch add ...'.format(PREFIX))
         await ctx.send(embed=e)
 
-    @help.group(name='Other', invoke_without_command=True)
+    @help.group(name='Other', invoke_without_command=True, case_insensitive=True)
     async def help_other(self, ctx):
         if ctx.invoked_subcommand is None:
             cmds = [['APB', 'APB Game Commands']]
