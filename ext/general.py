@@ -13,9 +13,9 @@ class General:
     def __init__(self, bot):
         self.bot = bot
         
-    __version__ = '0.8.5-rewrite'
+    __version__ = '0.8.7-rewrite'
 
-    __updated__ = '15.05.2018'
+    __updated__ = '31.05.2018'
 
     @commands.command(pass_context=True)
     async def avatar(self, ctx, *, member: discord.Member = None):

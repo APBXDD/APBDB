@@ -30,7 +30,7 @@ class AMS:
 
         self.debug = False
         self.logging = True
-        self.blacklist = True
+        self.blacklist = False
 
     EMBED_COLOR = 0xE59900
 
