@@ -212,9 +212,9 @@ class APBDB2:
                 postID = server[2]
                 mods = server[3]
                 if mods is 0:
-                    request_url = self.API_URL + 'tracker?mod=False&currentid={}'.format(postID)
+                    request_url = self.API_URL + 'tracker?mod=False&currentid={}&limit=1000'.format(postID)
                 else:
-                    request_url = self.API_URL + 'tracker?currentid={}'.format(postID)
+                    request_url = self.API_URL + 'tracker?currentid={}&limit=1000'.format(postID)
                 print("[DEBUG][nf] [{0}] Attempting API request: {1}".format(guild, request_url))
                 posts = []
                 posts = await utils.api_request(request_url)
@@ -237,13 +237,14 @@ class APBDB2:
                             desc_quote = soup.find('blockquote').get_text()
                             for tag in soup.find_all('blockquote'):
                                 tag.replaceWith('')
-                                desc_admin = soup.find('div').get_text()
+                                desc_admin = soup.find('div', attrs={"class", "ipsType_break ipsType_richText ipsContained"}).get_text()
                         else:
-                            desc_admin = soup.find('div').get_text()
+                            desc_admin = soup.find('div', attrs={"class", "ipsType_break ipsType_richText ipsContained"}).get_text()
 
                         # Remove HTMl and non-ASCII symbols
                         desc_admin = await self.rem_color_code(desc_admin)
                         desc_admin = (''.join([i if ord(i) < 128 else '' for i in desc_admin]))
+                        desc_admin = re.sub("\s\s+" , " ", desc_admin)
 
                         # combine final description (only admin rn)
                         desc = desc_admin
@@ -264,7 +265,7 @@ class APBDB2:
                         e.set_author(
                             name=post['author']['name'],
                             url=post['author']['profilelink'],
-                            icon_url=post['author']['imagelink']
+                            icon_url=post['author']['imagelink'].replace('//forums-cdn', 'https://forums-cdn')
                         )
 
                         try:
