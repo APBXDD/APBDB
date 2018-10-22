@@ -59,20 +59,37 @@ class Help:
         e.set_footer(text='Example: {}admin shutdown'.format(PREFIX))
         await ctx.send(embed=e)
 
-    @help.command(name='Moderation')
+    @help.group(name='Moderation', invoke_without_command=True, case_insensitive=True)
     async def _moderation(self, ctx):
-        cmds = [['ban [mention] (reason)', 'Ban a user'],
-                ['kick [mention] (reason)', 'Kick a user'],
-                ['timeout list (page)', 'Shows currently active timeouts'],
-                ['timeout overview (page)', 'Shows users with more than one timeout'],
-                ['timeout overview user [mention]', 'Shows timeouts for a user'],
-                ['timeout remove [mention]', 'Remove active timeout from mentioned user'],
-                ['timeout reset [mention]', 'Reset timeouts for mentioned user'],
-                ['timeout user [mention] [minutes] (reason)', 'Timeout mentioned user for x minutes']]
+        if ctx.invoked_subcommand is None:
+            cmds = [['ams', 'Automated Moderation System'],
+                    ['ban [mention] (reason)', 'Ban a user'],
+                    ['kick [mention] (reason)', 'Kick a user'],
+                    ['timeout list (page)', 'Shows currently active timeouts'],
+                    ['timeout overview (page)', 'Shows users with more than one timeout'],
+                    ['timeout overview user [mention]', 'Shows timeouts for a user'],
+                    ['timeout remove [mention]', 'Remove active timeout from mentioned user'],
+                    ['timeout reset [mention]', 'Reset timeouts for mentioned user'],
+                    ['timeout user [mention] [minutes] (reason)', 'Timeout mentioned user for x minutes']]
 
-        e = discord.Embed(title='Help - Moderation', color=self.EMBED_COLOR)
+            e = discord.Embed(title='Help - Moderation', color=self.EMBED_COLOR)
+            e = await self.alt_description(cmds, e)
+            e.set_footer(text='Example: {}timeout ...'.format(PREFIX))
+            await ctx.send(embed=e)
+
+    @_moderation.command(name='ams')
+    async def __ams(self, ctx):
+        cmds = [['enable', 'Enable the Automated Moderation System'],
+                ['disable', 'Disable the Automated Moderation System'],
+                ['logs [mention]', 'Show the last 10 logged messages of mentioned user'],
+                ['filter add [string]', 'Add a string to the blacklist'],
+                ['filter remove [string]', 'Remove a string from the blacklist'],
+                ['filter clear', 'Clear entire blacklist'],
+                ['filter list', 'Show all blacklisted strings']]
+
+        e = discord.Embed(title='Help - Moderation - AMS', color=self.EMBED_COLOR)
         e = await self.alt_description(cmds, e)
-        e.set_footer(text='Example: {}timeout ...'.format(PREFIX))
+        e.set_footer(text='Example: {}ams enable'.format(PREFIX))
         await ctx.send(embed=e)
 
     @help.command(name='Settings')
@@ -111,7 +128,11 @@ class Help:
         cmds = [['apb feed channel [set|remove]', 'Set/Remove Admin Tracker news feed'],
                 ['apb feed mod [true|false]', 'Enable/Disable mods in news feed'],
                 ['apb feed set [int]', 'Set post ID for news feed'],
-                ['db [item_name]', 'Search for a item']]
+                ['apb version channel [set|remove]', 'Set/Remove APB version feed'],
+                ['apb version set [version]', 'Set version for version feed'],
+                ['apb version reset', 'Resets the version feed'],
+                ['db [item_name]', 'Search for a item'],
+                ['pop', 'Show server population']]
         e = discord.Embed(title='Help - Other - APB', color=self.EMBED_COLOR)
         e = await self.alt_description(cmds, e)
         e.set_footer(text='Example: {}db ...'.format(PREFIX))

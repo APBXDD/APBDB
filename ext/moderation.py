@@ -7,13 +7,14 @@ from datetime import datetime, timedelta
 from discord.ext import commands
 from ext.utils import checks, embeds
 from settings import *
+from ext.utils.utils import Message
 
 
 class Moderation:
     def __init__(self, bot):
         self.bot = bot
 
-        self.connection = sqlite3.connect(DATABASE)
+        self.connection = sqlite3.connect(DATABASE, isolation_level=None)
         self.c = self.connection.cursor()
 
         self.timeout_lock = asyncio.Lock()
@@ -24,6 +25,7 @@ class Moderation:
 
     @commands.command()
     @checks.can_manage()
+    @commands.guild_only()
     async def ban(self, ctx, member: discord.Member=None, *, reason: str=None):
         """Ban a user from the discord guild"""
 
@@ -86,6 +88,7 @@ class Moderation:
 
     @commands.command()
     @checks.can_manage()
+    @commands.guild_only()
     async def kick(self, ctx, member: discord.Member=None, *, reason: str=None):
         """ Kick a user from the guild """
 
@@ -148,16 +151,29 @@ class Moderation:
 
     @commands.command()
     @checks.can_manage()
-    async def prune(self, ctx, amount: int, member: discord.Member=None):
+    @commands.guild_only()
+    async def prune(self, ctx, amount: int, *, text: str = None):
         """Prune x amount of messages"""
         try:
-            if member is None:
-                await ctx.channel.purge(limit=amount)
+            if text is None:
+                await ctx.channel.purge(limit=amount+1)
+            else:
+                counter = 0
+                async for message in ctx.channel.history(limit=amount):
+                    if text in message.content:
+                        await message.delete()
+                        counter+=1
+                    #elif len(message.embeds) > 0:
+                    #    for embed in message.embeds:
+                    #        if text in embed.title or text in embed.description:
+                    #            await message.delete()
+                await ctx.send(embed=discord.Embed(title='Done', description='Deleted {} message(s).'.format(counter)))
         except Exception as e:
             await ctx.send(embed=discord.Embed(title='Error', description=str(e)))
 
     @commands.group()
     @checks.can_manage()
+    @commands.guild_only()
     async def timeout(self, ctx):
         """ Timeout commands
             - requires manage message permissions
@@ -415,11 +431,12 @@ class Moderation:
                     e.set_footer(text=ctx.message.author, icon_url=ctx.message.author.avatar_url)
                     await channel.send(embed=e)
             except discord.errors.NotFound as e:
-                print('[error]Timeout activitylog channel: {}'.format(e))
+                Message(3, '[TIMEOUT][LOG] {}'.format(e))
 
 
     @commands.group()
     @checks.is_owner_guild()
+    @commands.guild_only()
     async def settings(self, ctx):
         """ Commands for guild owner"""
         if ctx.invoked_subcommand is None:
@@ -440,7 +457,7 @@ class Moderation:
             await ctx.send(embed=await embeds.default_exception(e))
         else:
             self.connection.commit()
-            print('[database]Guild {0.name} : {0.id} added!'.format(ctx.message.guild))
+            Message(2, '[DATABASE][ADD][GUILD] {0.id} : {0.name}'.format(ctx.message.guild))
             await ctx.send(embed=discord.Embed(
                 title='Server readded',
                 description='Server {0.name} readded to database.'.format(ctx.message.guild),
@@ -472,7 +489,7 @@ class Moderation:
         try:
             self.c.execute('UPDATE servers SET ActivityLogChannel = ? WHERE ID = ?', (0, ctx.message.guild.id))
         except Exception as e:
-            print('[error]_activitylog_set: {}'.format(e))
+            Message(3, '[ACTIVITYLOG]: {}'.format(e))
         else:
             self.connection.commit()
             await ctx.send(embed=discord.Embed(
@@ -482,34 +499,46 @@ class Moderation:
             ))
 
     async def timeout_check(self):
-        print('[bg] Timeout check active')
+        Message(2, '[TIMEOUT] Timeout check active')
         while not self.bot.is_closed():
             async with self.timeout_lock:
-                try:
-                    self.c.execute('SELECT * FROM timeouts WHERE Enabled = 1')
-                    timeouts = self.c.fetchall()
-                    if len(timeouts) > 0:
-                        for timeout in timeouts:
+                self.c.execute('SELECT * FROM timeouts WHERE Enabled = 1')
+                timeouts = self.c.fetchall()
+                if len(timeouts) > 0:
+                    for timeout in timeouts:
+                        try:
                             guild = self.bot.get_guild(int(timeout[1]))
+
                             if guild is None:
-                                print('[ERR] timeout_check: server not found (ID: {})... Removing server entries...'.format(str(timeout[1])))
+                                Message(3, '[TIMEOUT] Guild not found (ID: {}) | Removing server entries...'.format(str(timeout[1])))
                                 self.c.execute('DELETE FROM timeouts WHERE ServerID = ?', [timeout[1]])
+                                continue
+                            
+                            member = guild.get_member(int(timeout[2]))
+                            timeout_time = datetime.strptime(timeout[3], '%Y-%m-%d %H:%M:%S') + timedelta(minutes=timeout[4])
+                            if member is not None:
+                                role = discord.utils.get(guild.roles, name='Blocked')
+
+                                if role is None:
+                                    Message(2, '[TIMEOUT][{0}] ({0.id}) has no Blocked role. Removing timeout...'.format(guild))
+                                    self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', [timeout[0]])
+                                    continue 
+
+                                Message(1, '[TIMEOUT][{0}] MEMBER {1}  | TIME {2}'.format(guild, member, timeout_time))
+                                if timeout_time <= datetime.now():
+                                    await member.remove_roles(role)
+                                    self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', [timeout[0]])
+                                else:
+                                    await member.add_roles(role)
                             else:
-                                member = guild.get_member(int(timeout[2]))
-                                if member is not None:
-                                    role = discord.utils.get(guild.roles, name='Blocked')
-                                    timeout_time = datetime.strptime(timeout[3], '%Y-%m-%d %H:%M:%S') + timedelta(minutes=timeout[4])
-                                    print('[DEBUG][timeout-check] SERVER : {} | MEMBER : {}  | Timeout Time: {}'.format(guild, member, timeout_time))  # DEBUG
-                                    if timeout_time <= datetime.now():
-                                        await member.remove_roles(role)
-                                        self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', [timeout[0]])
-                                    else:
-                                        await member.add_roles(role)
-                except Exception as e:
-                    print('[error]timeout_check: {}'.format(e))
-                finally:
-                    self.connection.commit()
-            print('[DEBUG] TIMEOUT CHECK : EVENT : LOOP COMPLETED (15 s)')
+                                if timeout_time <= datetime.now():
+                                    self.c.execute('UPDATE timeouts SET Enabled = 0 WHERE ID = ?', [timeout[0]])
+                                    Message(2, '[TIMEOUT][{0}] Removed missing member: {1} (timeout finished)'.format(guild, timeout[2]))
+                        except Exception as e:
+                            Message(3, '[TIMEOUT] {}'.format(e))
+                        finally:
+                            self.connection.commit()
+            Message(1, '[TIMEOUT] LOOP COMPLETED (15 s)')
             await asyncio.sleep(15)
 
     async def add_user(self, ctx, user_id):
@@ -518,7 +547,7 @@ class Moderation:
         except Exception as e:
             await ctx.send(embed=discord.Embed(title='Error', description=str(e)))
         else:
-            print('[database]ADDED USER : {}'.format(user_id))
+            Message(2, '[DATABASE][ADD] USER : {}'.format(user_id))
 
     async def get_activitylog_channel(self, guildid):
         self.c.execute('SELECT ActivityLogChannel FROM servers WHERE ID = ?', [guildid])

@@ -6,6 +6,7 @@ import sqlite3
 from discord.ext import commands
 from ext.utils import checks, embeds
 from settings import *
+from ext.utils.utils import Message
 
 
 class AMS:
@@ -15,9 +16,10 @@ class AMS:
 
        Features:
        - logging
+       - blacklist for text
 
        WIP:
-       - blacklist for text
+       - ???
 
        SoonTM:
        - emoji, mention, reactions spam detection and prevention
@@ -25,12 +27,12 @@ class AMS:
     def __init__(self, bot):
         self.bot = bot
 
-        self.connection = sqlite3.connect(DATABASE)
+        self.connection = sqlite3.connect(DATABASE, isolation_level=None)
         self.c = self.connection.cursor()
 
         self.debug = False
         self.logging = True
-        self.blacklist = False
+        self.blacklist = True
 
     EMBED_COLOR = 0xE59900
 
@@ -47,22 +49,27 @@ class AMS:
             Checks message for blacklisted words / texts.
 
             1. Get blacklisted words from db
-            2. Check if any word is in the msg.content
-            3. Remove message / Keep message
+            2. check if case sensitive or not
+            3. Check if string is in the msg.content
+            4. Remove message / Keep message
         """
+        try:
+            guildid = msg.guild.id
+        except AttributeError:
+            return
 
-        blacklist = self.c.execute('SELECT Blacklisted FROM AMSBlacklist WHERE ServerID = ?', [msg.guild.id])
+        blacklist = self.c.execute('SELECT Blacklisted, CaseSensitive FROM AMSBlacklist WHERE ServerID = ?', [msg.guild.id]).fetchall()
 
-        if any(bltext[0] in msg.content for bltext in blacklist):
+        for blacklisted in blacklist:
             try:
-                await msg.delete()
+                if blacklisted[1] is 1 and blacklisted[0] in msg.content or blacklisted[1] is 0 and blacklisted[0].lower() in msg.content.lower():
+                    await msg.delete()
+                    Message(1, '[BLACKLIST][{0.guild}] REMOVED MESSAGE | USER {0.author} ({0.author.id}) '.format(msg))
             except discord.Forbidden:
-                print('[DEBUG] BLACKLIST : ERROR : NO PERMISSIONS : SERVER - {0.guild} ({0.guild.id})'.format(msg))
-            else:
-                print('[DEBUG] BLACKLIST : REMOVED MESSAGE : USER - {0.author} '.format(msg))
+                Message(3, '[BLACKLIST][{0.guild}] NO PERMISSIONS : {0.channel} ({0.channel.id})'.format(msg))
 
     async def console_message(self, msg):
-        print('[AMS] {0.created_at} | ID : {0.id} | {0.guild} ({0.guild.id}) | {0.author} ({0.author.id}) | EVERYONE : {0.mention_everyone} | MESSAGE : "{0.content}"'.format(msg))
+        Message(1, '[AMS] {0.created_at} | ID : {0.id} | {0.guild} ({0.guild.id}) | {0.author} ({0.author.id}) | EVERYONE : {0.mention_everyone} | MESSAGE : "{0.content}"'.format(msg))
 
     async def log_message(self, msg):
         try:
@@ -88,12 +95,12 @@ class AMS:
             ))
             self.connection.commit()
         except sqlite3.OperationalError:
-            print('[ams] Error - database locked!')
+            Message(3, '[AMS] DATABASE LOCKED!')
 
     @commands.group()
     @checks.is_owner_guild()
+    @commands.guild_only()
     async def ams(self, ctx):
-        await ctx.trigger_typing()
         if ctx.invoked_subcommand is None:
             pass
 
@@ -102,44 +109,29 @@ class AMS:
         """
             Disables AMS on a guild
         """
-        try:
-            self.c.execute('UPDATE servers SET UseAMS = ? WHERE ID = ?', (False, ctx.message.guild.id))
-        except Exception as e:
-            await ctx.send(embed=discord.Embed(
-                title="Error", 
-                description=str(e),
-                color=self.EMBED_COLOR
-            ))
-        else:
-            self.connection.commit()
-            await ctx.send(embed=discord.Embed(
-                title="AMS - Automated Moderation System",
-                description='AMS is now disabled.',
-                color=self.EMBED_COLOR
-            ))
+        await self.use_ams(ctx, False)
 
     @ams.command(name="enable")
     async def _ams_enable(self, ctx):
         """
             Enables AMS in a guild
         """
-        try:
-            self.c.execute('UPDATE servers SET UseAMS = ? WHERE ID = ?', (True, ctx.message.guild.id))
-        except Exception as e:
-            await ctx.send(embed=discord.Embed(
-                title="Error", 
-                description=str(e),
-                color=self.EMBED_COLOR
-            ))
+        await self.use_ams(ctx, True)
+    
+    async def use_ams(self, ctx, enable: bool):
+        self.c.execute('UPDATE servers SET UseAMS = ? WHERE ID = ?', (enable, ctx.message.guild.id))
+        self.connection.commit()
+
+        if enable is True:
+            description = 'AMS is now active.\nPlease use {}ams level to set the AMS level.'.format(PREFIX)
         else:
-            self.connection.commit()
-            await ctx.send(embed=discord.Embed(
-                title="AMS - Automated Moderation System",
-                description='AMS is now active.\nPlease use {}ams level to set the AMS level.'.format(
-                    PREFIX
-                ),
-                color=self.EMBED_COLOR
-            ))
+            description = 'AMS is now disabled.'
+
+        await ctx.send(embed=discord.Embed(
+            title="Automated Moderation System",
+            description=description,
+            color=self.EMBED_COLOR
+        ))
 
     @ams.command(name="logs")
     async def _ams_logs(self, ctx, *, user: discord.User):
@@ -170,7 +162,7 @@ class AMS:
                 )
             else:
                 e = discord.Embed(
-                    title="AMS - Automated Moderation System",
+                    title="Automated Moderation System",
                     description="No ID given.",
                     color=self.EMBED_COLOR
                 )
@@ -185,6 +177,8 @@ class AMS:
 
     @ams.group(name='filter')
     async def filter(self, ctx):
+        # TODO: Add option to enable / disable case-sensitivity 
+        #       for already created entries.
         if ctx.invoked_subcommand is None:
             pass
 
@@ -193,20 +187,46 @@ class AMS:
         blacklist = self.c.execute('SELECT Blacklisted FROM AMSBlacklist WHERE ServerID = ?', [ctx.guild.id]).fetchall()
 
         if not any(text == bltext[0] for bltext in blacklist):
-            self.c.execute('INSERT INTO AMSBlacklist (ServerID, Blacklisted) VALUES (?, ?)', 
-                            (ctx.guild.id, text))
+            check_message = await ctx.message.channel.send(embed=discord.Embed(
+                title='AMS - Blacklist',
+                description='Enable case-sensitivity for blacklisted text: **{0}**?\n'\
+                            'Yes / No to enable / disable.'.format(text),
+                color=0x000000
+            ))
 
-            e = discord.Embed(
-                title='AMS Filter',
-                description='**{0}** is now blacklisted on this server.'.format(text),
-                color=0x000000,
-            )
+            def check(m):
+                if m.channel == ctx.message.channel and ctx.message.author is m.author:
+                    return m.content.lower() == 'yes' or m.content.lower() == 'no'
+
+            try:
+                msg = await self.bot.wait_for('message', timeout=30.0, check=check)
+            except asyncio.TimeoutError:
+                e = discord.Embed(
+                    title='AMS - Blacklist - Canceled',
+                    description='No response received.',
+                    color=0x000000
+                )
+                await check_message.edit(embed=e)
+                return
+            else:
+                await msg.delete()
+                if msg.content.replace('{0}ams filter add '.format(PREFIX), '').lower() == 'yes':
+                    enable = True
+                else:
+                    enable = False
+
+            self.c.execute('INSERT INTO AMSBlacklist (ServerID, Blacklisted, CaseSensitive) VALUES (?, ?, ?)', 
+                          (ctx.guild.id, text, enable))
+
+            description = '**{0}** is now blacklisted on this server.'.format(text)
         else:
-            e = discord.Embed(
-                title='AMS Filter',
-                description='**{0}** is already blacklisted on this server.'.format(text),
-                color=0x000000,
-            )
+            description = '**{0}** is already blacklisted on this server.'.format(text)
+
+        e = discord.Embed(
+            title='AMS - Blacklist',
+            description=description,
+            color=0x000000,
+        )
         e.set_footer(text='You can remove blacklisted text with {0}ams filter remove [text]'.format(PREFIX))
         self.connection.commit()
         await ctx.send(embed=e)
@@ -219,17 +239,15 @@ class AMS:
             self.c.execute('DELETE FROM AMSBlacklist WHERE ServerID = ? AND Blacklisted = ?', 
                             (ctx.guild.id, text))
 
-            e = discord.Embed(
-                title='AMS Filter',
-                description='**{0}** removed from the blacklist.'.format(text),
-                color=0x000000,
-            )
+            description='**{0}** removed from the blacklist.'.format(text)
         else:
-            e = discord.Embed(
-                title='AMS Filter',
-                description='**{0}** is not blacklisted on this server.'.format(text),
-                color=0x000000,
-            )
+            description = '**{0}** is not blacklisted on this server.'.format(text)
+
+        e = discord.Embed(
+            title='AMS - Blacklist',
+            description=description,
+            color=0x000000,
+        )
         e.set_footer(text='You can clear the blacklist with {0}ams filter clear'.format(PREFIX))
         self.connection.commit()
         await ctx.send(embed=e)
@@ -237,7 +255,7 @@ class AMS:
     @filter.command(name='clear')
     async def filter_clear(self, ctx):
         e = discord.Embed(
-            title='AMS Filter - Clear',
+            title='AMS - Blacklist - Clear',
             description='Are you sure you want to remove all text filters?\nThis **cannot** be undone!',
             color=0x000000
         )
@@ -252,7 +270,7 @@ class AMS:
             await msg.delete()
         except asyncio.TimeoutError:
             e = discord.Embed(
-                title='AMS Filter - Clear canceled',
+                title='AMS - Blacklist - Clear canceled',
                 description='Blacklist was not cleared!',
                 color=0x000000
             )
@@ -263,7 +281,7 @@ class AMS:
             self.c.execute('DELETE FROM AMSBlacklist WHERE ServerID = ?', [ctx.guild.id])
 
             e = discord.Embed(
-                title='AMS Filter - Cleared!',
+                title='AMS - Blacklist - Cleared!',
                 description='Blacklist was cleared!',
                 color=0x000000
             )
@@ -275,16 +293,17 @@ class AMS:
 
     @filter.command(name='list')
     async def filter_list(self, ctx, *, page: int = None):
-        blacklist = self.c.execute('SELECT Blacklisted FROM AMSBlacklist WHERE ServerID = ?', [ctx.guild.id]).fetchall()
+        blacklist = self.c.execute('SELECT Blacklisted, CaseSensitive FROM AMSBlacklist WHERE ServerID = ?', [ctx.guild.id]).fetchall()
         per_embed = 15
         page = 1 if page is None or page < 1 or page > math.ceil(len(blacklist) / per_embed) else page 
 
-        desc = 'Blacklisted text on this server:\n\n'
-        for bltext in blacklist[(0 + (per_embed * (page - 1))):(per_embed + (per_embed * (page - 1)))]:
-            desc += '**{0}**\n'.format(bltext[0])
+        desc = 'Blacklisted text on this server:\n\n'\
+               'Case Sensitive | Blacklisted String\n' 
+        for blacklisted in blacklist[(0 + (per_embed * (page - 1))):(per_embed + (per_embed * (page - 1)))]:
+            desc += '{0[1]} | **{0[0]}**\n'.format(blacklisted)
 
         e = discord.Embed(
-            title='AMS Filter - Blacklist',
+            title='AMS - Blacklist',
             description=desc,
             color=0x000000,
         )

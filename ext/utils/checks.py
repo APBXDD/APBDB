@@ -19,6 +19,9 @@ def is_owner_guild():
 
 def can_manage():
     def predicate(ctx):
+        if ctx.message.author.id == OWNER_ID:
+            return True
+
         try:
             return ctx.message.channel.permissions_for(ctx.message.author).manage_messages
         except:

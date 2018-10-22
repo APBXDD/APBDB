@@ -17,7 +17,7 @@ class Twitch:
     def __init__(self, bot):
         self.bot = bot
 
-        self.connection = sqlite3.connect(DATABASE)
+        self.connection = sqlite3.connect(DATABASE, isolation_level=None)
         self.c = self.connection.cursor()
 
         self.notifier_task = bot.loop.create_task(self.twitch_notify())
@@ -31,6 +31,7 @@ class Twitch:
 
     @commands.group(case_insensitive=True)
     @checks.can_manage()
+    @commands.guild_only()
     async def twitch(self, ctx):
         if ctx.invoked_subcommand is None:
             pass
@@ -165,9 +166,8 @@ class Twitch:
             await self.twitch_e(ctx, 'Notification channel removed.')
 
     async def twitch_notify(self):
-        Message(1, "[TWITCH] Notifier loop active")
+        Message(2, "[TWITCH] Notifier loop active")
         while not self.bot.is_closed():
-            Message(1, "[TWITCH] Notifier loop starting")
             async with self.notifier_task_lock:
                 self.c.execute('SELECT * FROM servers')
                 guilds = self.c.fetchall()
@@ -186,7 +186,7 @@ class Twitch:
                                         Message(1, "[TWITCH] Stream {0} live. Broadcasting...".format(stream['channel']['display_name']))
                                         await self.twitch_notify_message(stream, guild[2])
                         except Exception as e:
-                            print(e)
+                            Message(3, "[TWITICH] {}".format(e))
             Message(1, "[TWITCH] Notifier loop completed (120 s)")
             await asyncio.sleep(120)
 
@@ -252,7 +252,7 @@ class Twitch:
                         stream['channel']['_id'], 
                     ))
                     self.connection.commit()
-        return False
+            return False
 
     async def twitch_notify_message(self, stream, channel_id):
         try:
@@ -270,7 +270,7 @@ class Twitch:
             e.set_footer(text='Stream started')
             await channel.send(embed=e)
         except Exception as e:
-            print('[Error]twitch_notify_message: {}'.format(e))
+            Message(3, '[TWITCH] {}'.format(e))
 
     async def twitch_e(self, ctx, title, description=None):
         channel = self.bot.get_channel(ctx.message.channel.id)

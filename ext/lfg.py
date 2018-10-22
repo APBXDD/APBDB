@@ -15,10 +15,12 @@ class LFG:
     def __init__(self, bot):
         self.bot = bot
 
-        self.connection = sqlite3.connect(DATABASE)
+        self.connection = sqlite3.connect(DATABASE, isolation_level=None)
         self.c = self.connection.cursor()
 
     @commands.group(invoke_without_command=True, case_insensitive=True)
+    @commands.guild_only()
+    @commands.cooldown(rate=3, per=900, type=commands.BucketType.user)
     async def ready(self, ctx):
         if ctx.invoked_subcommand is None:
             self.c.execute('SELECT RoleID FROM lfg WHERE ServerID = ?', [ctx.message.guild.id])

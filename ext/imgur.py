@@ -5,6 +5,7 @@ import sqlite3
 from discord.ext import commands
 from random import choice
 from settings import *
+from ext.utils.utils import Message
 
 ext = True
 try:
@@ -69,5 +70,5 @@ def setup(bot):
     if ext is True:
         bot.add_cog(Imgur(bot))
     else:
-        print('[exts]Extension "imgur" not loaded. Missing imgurpython! (pip install imgurpython)')
+        Message(2, '[EXTENSION] "imgur" not loaded. Missing imgurpython! (pip install imgurpython)')
         raise ImportError

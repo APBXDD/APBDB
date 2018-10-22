@@ -58,6 +58,16 @@ CREATE TABLE IF NOT EXISTS apb_news_feed (
     FOREIGN KEY (ID) REFERENCES servers(ID)
 );
 
+CREATE TABLE IF NOT EXISTS apb_version_feed (
+    ID INTEGER NOT NULL,
+    ChannelID INTEGER NOT NULL,
+    VersionLive VARCHAR(64),
+    VersionOTW VARCHAR(64),
+    VersionOTW2 VARCHAR(64),
+    PRIMARY KEY (ID),
+    FOREIGN KEY (ID) REFERENCES servers(ID)
+);
+
 CREATE TABLE IF NOT EXISTS lfg (
     RoleID INTEGER NOT NULL,
     ServerID INTEGER NOT NULL,
@@ -83,5 +93,6 @@ CREATE TABLE IF NOT EXISTS AMSBlacklist (
     ID INTEGER PRIMARY KEY,
     ServerID INTEGER NOT NULL,
     Blacklisted TEXT NOT NULL,
+    CaseSensitive BOOLEAN NOT NULL,
     FOREIGN KEY (ServerID) REFERENCES servers(ID)
 );

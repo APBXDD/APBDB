@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime
 from discord.ext import commands
 from settings import *
+from ext.utils.utils import Message
 
 ext = True
 
@@ -86,5 +87,5 @@ def setup(bot):
     if ext is True:
         bot.add_cog(PUBG(bot))
     else:
-        print('[exts]Extension "pubg" not loaded. Missing pypubg! (pip install pypubg)')
+        Message(2, '[EXTENSION] "pubg" not loaded. Missing pypubg! (pip install pypubg)')
         raise ImportError

@@ -3,6 +3,7 @@ import async_timeout
 import sqlite3
 import websockets
 import json
+import asyncio
 
 from settings import *
 from datetime import datetime

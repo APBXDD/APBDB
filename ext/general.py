@@ -7,15 +7,13 @@ from random import choice
 from settings import *
 
 
-
-
 class General:
     def __init__(self, bot):
         self.bot = bot
         
-    __version__ = '0.8.7-rewrite'
+    __version__ = '0.9.8'
 
-    __updated__ = '31.05.2018'
+    __updated__ = '03.10.2018'
 
     @commands.command(pass_context=True)
     async def avatar(self, ctx, *, member: discord.Member = None):
@@ -33,7 +31,7 @@ class General:
     async def info(self, ctx):
         e = discord.Embed(
             title='{}'.format(self.bot.user.name),
-            description='**Creator:** Speed#8053 (135822605583253504)\n'
+            description='**Creator:** Speed#0001 (135822605583253504)\n'
                         '**Version:** {0} ({1})\n'
                         '**Library:** Discord.py {2}\n'
                         '**Guilds:** {3}\n'
@@ -61,7 +59,8 @@ class General:
         await ctx.send(embed=e)
 
     @commands.command()
-    async def serverinfo(self, ctx, *, guildid: str = None):
+    @commands.guild_only()
+    async def serverinfo(self, ctx, *, guildid: int = None):
         """Displays information about the current server"""
 
         if guildid is not None:

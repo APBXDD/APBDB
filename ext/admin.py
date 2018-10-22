@@ -6,13 +6,14 @@ from discord.ext import commands
 from datetime import datetime
 from ext.utils import checks
 from settings import *
+from ext.utils.utils import Message
 
 
 class Admin:
     def __init__(self, bot):
         self.bot = bot
 
-        self.connection = sqlite3.connect(DATABASE)
+        self.connection = sqlite3.connect(DATABASE, isolation_level=None)
         self.c = self.connection.cursor()
 
     @commands.group()
@@ -20,6 +21,15 @@ class Admin:
     async def admin(self, ctx):
         if ctx.invoked_subcommand is None:
             pass
+
+    @admin.command(name='nicknames')
+    @commands.guild_only()
+    async def admin_nicknames(self, ctx, *, name: str):
+        for member in ctx.message.guild.members:
+            try:
+                await member.edit(nick=name)
+            except:
+                pass
 
     @admin.command(name='announcement')
     async def admin_announcement(self, ctx, *, msg: str):
@@ -40,7 +50,6 @@ class Admin:
                 title='Success', 
                 description='Announcement send to {} owners.'.format(len(self.bot.guilds))
             ))
-
 
     @admin.group(name='execute')
     async def admin_execute(self, ctx):
@@ -148,26 +157,6 @@ class Admin:
     async def _admin_message(self, ctx, *, message: str):
         await ctx.send(message)
 
-    @admin.command(name='aprilfools')
-    async def _admin_aprilfools(self, ctx, channel: int, *, body: str):
-        e = discord.Embed(
-            title="Engine Upgrade Release - 20th April 2018",
-            description=body,
-            url="https://www.youtube.com/watch?v=DLzxrzFCyOs",
-            color=0xFF0000,
-            timestamp=datetime.now(),
-        )
-
-        e.set_author(
-            name="Tiggs",
-            url="https://uploads.forums.gamersfirst.com/user/450394-tiggs/",
-            icon_url="https://uploads.forums.gamersfirst.com/uploads/profile/photo-450394.gif?_r=0",
-        )
-
-        channel = ctx.guild.get_channel(channel)
-
-        await channel.send(embed=e)
-
     @admin.group(name='status')
     async def admin_status(self, ctx):
         """Change status of the bot"""
@@ -189,7 +178,7 @@ class Admin:
             await ctx.send(embed=discord.Embed(title='Error', description=e, color=0xFF0000))
         else:
             self.connection.commit()
-            print('[bot]Avatar image updated.')
+            Message(2, '[BOT]Avatar image updated.')
             await ctx.send(embed=discord.Embed(title='Avatar Image Updated'))
 
     @admin_status.command(name='game')
@@ -204,7 +193,7 @@ class Admin:
             await ctx.send(embed=discord.Embed(title='Error', description=str(e), color=0xFF0000))
         else:
             self.connection.commit()
-            print('[bot]Status game updated to "{}"'.format(game))
+            Message(2, '[BOT]Status game updated to "{}"'.format(game))
             await ctx.send(embed=discord.Embed(title='Game Update', description='"{}"'.format(game)))
 
     @admin_status.command(name='prefix')
@@ -219,7 +208,7 @@ class Admin:
             await ctx.send(embed=discord.Embed(title='Error', description=str(e), color=0xFF0000))
         else:
             self.connection.commit()
-            print('[bot]Status prefix updated to "{}"'.format(prefix))
+            Message(2, '[BOT]Status prefix updated to "{}"'.format(prefix))
             await ctx.send(embed=discord.Embed(title='Prefix Update', description='"{}"'.format(prefix)))
 
     @admin_status.command(name='username')
@@ -234,7 +223,7 @@ class Admin:
             await ctx.send(discord.Embed(title='Error', description=str(e)))
         else:
             self.connection.commit()
-            print('[bot]Username updated to "{}"'.format(username))
+            Message(2, '[BOT]Username updated to "{}"'.format(username))
             await ctx.send(embed=discord.Embed(title='Username Update', description='"{}"'.format(username)))
 
     @admin.command(name='reload')
@@ -259,7 +248,7 @@ class Admin:
             - Closes the bot
         """
         await ctx.send(embed=discord.Embed(title='Bot Shutting Down...'))
-        print('[exit]Bot is shutting down. Closing services...')
+        Message(2, '[BOT] Shutting down. Closing services...')
         self.connection.close()
         await self.bot.logout()
         await self.bot.close()
